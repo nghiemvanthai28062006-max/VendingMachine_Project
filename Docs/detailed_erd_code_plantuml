@@ -1,0 +1,147 @@
+@startuml
+hide circle
+skinparam linetype ortho
+skinparam EntityBackgroundColor #F8F9FA
+skinparam EntityBorderColor #343A40
+
+entity "users" {
+  * id : INT <<PK>>
+  --
+  username : VARCHAR(50) <<UNIQUE>>
+  password_hash : VARCHAR(255)
+  full_name : VARCHAR(100)
+  role : VARCHAR(20)
+  is_active : TINYINT(1)
+  created_at : DATETIME
+}
+
+entity "machines" {
+  * id : INT <<PK>>
+  --
+  code : VARCHAR(20) <<UNIQUE>>
+  name : VARCHAR(100)
+  location : VARCHAR(200)
+  status : VARCHAR(20)
+  last_heartbeat : DATETIME
+  created_at : DATETIME
+}
+
+entity "products" {
+  * id : INT <<PK>>
+  --
+  name : VARCHAR(100)
+  volume_ml : INT
+  price : INT
+  image_url : VARCHAR(255)
+  is_active : TINYINT(1)
+  created_at : DATETIME
+}
+
+entity "trays" {
+  * id : INT <<PK>>
+  --
+  machine_id : INT <<FK>>
+  code : VARCHAR(10)
+  product_id : INT <<FK>>
+  quantity : INT
+  capacity : INT
+  low_stock_threshold : INT
+}
+
+entity "orders" {
+  * id : INT <<PK>>
+  --
+  request_id : CHAR(36) <<UNIQUE>>
+  machine_id : INT <<FK>>
+  tray_id : INT <<FK>>
+  product_id : INT <<FK>>
+  amount : INT
+  status : VARCHAR(20)
+  dispense_request_id : CHAR(36) <<UNIQUE>>
+  created_at : DATETIME
+  expires_at : DATETIME
+  paid_at : DATETIME
+  completed_at : DATETIME
+}
+
+entity "payments" {
+  * id : INT <<PK>>
+  --
+  order_id : INT <<FK>>
+  method : VARCHAR(20)
+  transaction_code : VARCHAR(50) <<UNIQUE>>
+  amount : INT
+  status : VARCHAR(20)
+  created_at : DATETIME
+  paid_at : DATETIME
+}
+
+entity "refunds" {
+  * id : INT <<PK>>
+  --
+  order_id : INT <<FK>>
+  payment_id : INT <<FK>>
+  amount : INT
+  reason : VARCHAR(100)
+  status : VARCHAR(20)
+  created_at : DATETIME
+  completed_at : DATETIME
+}
+
+entity "restock_tickets" {
+  * id : INT <<PK>>
+  --
+  machine_id : INT <<FK>>
+  staff_id : INT <<FK>>
+  status : VARCHAR(20)
+  note : VARCHAR(255)
+  created_at : DATETIME
+  completed_at : DATETIME
+}
+
+entity "restock_ticket_items" {
+  * id : INT <<PK>>
+  --
+  ticket_id : INT <<FK>>
+  tray_id : INT <<FK>>
+  planned_qty : INT
+  actual_qty : INT
+}
+
+entity "alerts" {
+  * id : INT <<PK>>
+  --
+  machine_id : INT <<FK>>
+  tray_id : INT <<FK>>
+  type : VARCHAR(30)
+  message : VARCHAR(255)
+  is_resolved : TINYINT(1)
+  created_at : DATETIME
+  resolved_at : DATETIME
+  resolved_by : INT <<FK>>
+}
+
+' ====================================================
+' MANDATORY RELATIONSHIPS (||--o{ : Exactly One to Many)
+' ====================================================
+machines ||--o{ trays : ""
+machines ||--o{ orders : ""
+machines ||--o{ restock_tickets : ""
+machines ||--o{ alerts : ""
+trays ||--o{ orders : ""
+trays ||--o{ restock_ticket_items : ""
+products ||--o{ orders : ""
+orders ||--o{ payments : ""
+orders ||--o{ refunds : ""
+payments ||--o{ refunds : ""
+restock_tickets ||--o{ restock_ticket_items : ""
+
+' ====================================================
+' NULLABLE RELATIONSHIPS (|o--o{ : Zero or One to Many)
+' ====================================================
+products |o--o{ trays : ""
+users |o--o{ restock_tickets : ""
+trays |o--o{ alerts : ""
+users |o--o{ alerts : ""
+
+@enduml
