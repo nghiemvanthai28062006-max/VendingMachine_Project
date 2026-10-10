@@ -1,0 +1,47 @@
+@startuml ERD_TongQuat
+' ERD tổng quát - Hệ thống máy bán nước thông minh (10 bảng)
+
+skinparam dpi 220
+skinparam linetype ortho
+skinparam nodesep 70
+skinparam ranksep 70
+skinparam shadowing false
+skinparam roundCorner 12
+skinparam defaultFontName Arial
+skinparam defaultFontSize 14
+skinparam entity {
+  BackgroundColor #F3F3F3
+  BorderColor #555555
+}
+skinparam ArrowColor #333333
+hide circle
+hide empty members
+
+entity users
+entity machines
+entity products
+entity trays
+entity orders
+entity payments
+entity refunds
+entity restock_tickets
+entity restock_ticket_items
+entity alerts
+
+machines         ||-down-o{ trays
+products         |o-up-o{   trays
+machines         ||-left-o{ orders
+trays            ||-up-o{   orders
+products         ||-up-o{   orders
+orders           ||-left-o{ payments
+orders           ||-o{      refunds
+payments         ||-down-o{ refunds
+machines         ||-up-o{   restock_tickets
+users            |o-up-o{   restock_tickets
+restock_tickets  ||-down-o{ restock_ticket_items
+trays            ||-up-o{   restock_ticket_items
+users            -[hidden]right- restock_ticket_items
+machines         ||-right-o{ alerts
+trays            |o-up-o{   alerts
+users            |o-left-o{ alerts
+@enduml
