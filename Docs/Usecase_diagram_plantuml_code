@@ -1,0 +1,63 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+    BackgroundColor LightCyan
+    BorderColor DarkCyan
+}
+
+' 4 Tác nhân (Actor) Cốt lõi
+actor "Khách hàng" as Customer
+actor "Nhân viên tiếp hàng" as Staff
+actor "Quản trị viên" as Admin
+actor "Thiết bị (Máy bán nước)" as Device
+
+rectangle "Hệ Thống Quản Lý Máy Bán Nước" {
+    
+    usecase "Đăng nhập" as UC_Login
+    usecase "Tra cứu đơn hàng" as UC_SearchOrder
+
+    ' Khách hàng
+    usecase "Mua hàng & Thanh toán" as UC_Buy
+    
+    ' Thiết bị & Hệ thống nội bộ
+    usecase "Thực thi nhả hàng" as UC_Dispense
+    usecase "Xử lý hoàn tiền" as UC_Refund
+    usecase "Báo cáo trạng thái (Heartbeat)" as UC_Heartbeat
+
+    ' Admin
+    usecase "Quản lý danh mục Sản phẩm" as UC_ManageProduct
+    usecase "Quản lý Máy & Khay" as UC_ManageMachine
+    usecase "Tạo phiếu tiếp hàng" as UC_CreateTicket
+    usecase "Xem báo cáo doanh thu" as UC_ViewReport
+
+    ' Staff
+    usecase "Xem và xử lí cảnh báo" as UC_ViewAlerts
+    usecase "Xác nhận châm hàng (Tiếp hàng)" as UC_Restock
+
+    ' Quan hệ Extend nội bộ (Không cần Actor bên ngoài)
+    UC_Dispense <.. UC_Refund : <<extend>> (Nếu kẹt hàng/Lỗi)
+}
+
+Customer -- UC_Buy
+
+Device -- UC_Dispense
+Device -- UC_Heartbeat
+
+Admin -- UC_ManageProduct
+Admin -- UC_ManageMachine
+Admin -- UC_CreateTicket
+Admin -- UC_ViewReport
+
+Staff -- UC_ViewAlerts
+Staff -- UC_Restock
+Staff -- UC_SearchOrder
+
+Admin -- UC_Login
+Staff -- UC_Login
+
+' Tính kế thừa
+Admin -|> Staff
+
+@enduml
