@@ -61,6 +61,7 @@ entity "orders" {
   created_at : DATETIME
   expires_at : DATETIME
   paid_at : DATETIME
+  dispense_started_at : DATETIME
   completed_at : DATETIME
 }
 
