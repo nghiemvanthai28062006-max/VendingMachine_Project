@@ -226,3 +226,13 @@ Gộp: bấm Merge pull request, chọn Create a merge commit, rồi Confirm. Kh
 
 Kéo main về nhánh mình sau mỗi lần gộp: tạo PR base: nhánh của mình ← compare: main rồi bấm Merge. Nếu PR đang mở có nút Update branch thì bấm nút đó.
 
+9. ## Luật làm việc theo mốc
+
+Các mốc M0 → M4 là **điểm ghép nối**, không phải cổng chặn. Không ai phải đứng chờ ai để làm tiếp.
+
+1. **Mỗi người đi hết phần của mình theo tốc độ riêng.** Xong M0 thì sang M1 luôn, không đợi người khác.
+2. **Chạy thử với phần chưa có bằng đồ thay thế:** Device chưa có Server thì dùng MQTT Explorer publish `trays`, `order/status` mẫu; App chưa có Server thì dùng `FakeApiClient`; Server chưa có Device thì dùng MQTT Explorer gửi `order/create`... và Postman cho REST (xem `Docs/02-quy-uoc-ky-thuat.md`, mục 8).
+3. **Mỗi mốc có một buổi ghép nối** vào ngày cố định (ví dụ cuối tuần), không đợi "khi nào mọi người xong". Cả nhóm chạy đầu-cuối trên một máy. Chạy được mới tính là xong mốc; phần nào chưa kịp thì chuyển sang mốc sau.
+4. **Không làm vượt quá một mốc so với buổi ghép nối gần nhất.** Code quá xa mà chưa ghép thì lúc ghép lỗi lệch nhau dồn lại rất khó gỡ.
+5. **Có người trễ thì không bắt cả nhóm dừng:** các bên khác làm tiếp phần không phụ thuộc, hoặc người rảnh giúp phần đang nghẽn (thường là Server).
+6. **Người phụ trách tài liệu, kiểm thử, ghép nối** làm song song suốt dự án: vẽ sơ đồ, viết test case, chủ trì buổi ghép nối, viết báo cáo dần mỗi tuần.
