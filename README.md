@@ -184,3 +184,11 @@ Mosquitto   từ chối kết nối	Kiểm tra allow_anonymous false + file pass
 Device      không nhận trays	Kiểm tra Server đã publish retained chưa, kiểm tra ACL cho phép read vending/%c/trays
 App báo 401	Token JWT hết hạn (8 giờ), đăng nhập lại
 Port 5000 hoặc 1883 bị chiếm	Đổi trong file cấu hình, không cần sửa code
+
+#Các bước pull request
+Code trong thư mục của mình, trên đúng nhánh của mình (ví dụ feature/server).
+Commit và Push bằng Visual Studio: mở Git Changes, ghi một dòng mô tả, bấm Commit All, rồi bấm Push.
+Mở pull request trên GitHub: tab Pull requests → New pull request, chọn base: main ← compare: nhánh của mình, bấm Create pull request.
+Nhờ một bạn khác vào PR bấm Approve.
+Gộp: bấm Merge pull request, chọn Create a merge commit, rồi Confirm. Không bấm Delete branch.
+Kéo main về nhánh mình sau mỗi lần gộp: tạo PR base: nhánh của mình ← compare: main rồi bấm Merge. Nếu PR đang mở có nút Update branch thì bấm nút đó.
