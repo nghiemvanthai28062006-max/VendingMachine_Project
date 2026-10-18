@@ -15,6 +15,7 @@ Hai đường giao tiếp tách biệt:
 - Trạng thái và loại là chuỗi tiếng Anh viết hoa, đúng như trong `schema.sql` (xem File 1, mục 7 và bảng `orders`, `alerts`...).
 - `requestId` là UUID v4 do Device sinh **mới cho mỗi yêu cầu nghiệp vụ**. Gửi lại thì Server không xử lý lần hai mà publish lại `order/status` hiện tại của đơn; cách nhận ra bản trùng của từng topic xem BR-16.
 - Server gọi `SweepStaleOrders()` / `CheckAndExpireOrder(orderId)` theo BR-20 ở đầu những xử lý được ghi chú **[lazy]** trong tài liệu này.
+- Trường có giá trị null có thể vắng mặt trong JSON; người đọc coi trường vắng mặt như null.
 
 ---
 
