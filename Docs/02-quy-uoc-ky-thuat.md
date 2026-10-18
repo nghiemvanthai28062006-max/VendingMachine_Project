@@ -168,23 +168,52 @@ App quản lý
 json
 { "Api": { "BaseUrl": "http://localhost:5000/api" } }
 8. Thứ tự làm và ghép nối
-Mỗi người làm song song, ghép theo từng "lát dọc" như sau.
-
-Mốc	Server	Device	App
-M0: nền	Khung project, kết nối DB, đăng nhập JWT, đọc cấu hình	Khung WinForms, giao diện lưới khay đọc dữ liệu mẫu từ file JSON	Khung WinForms, màn hình đăng nhập (dùng FakeApiClient)
-M1: nối MQTT	Kết nối broker, nhận heartbeat, publish trays (retained)	Kết nối broker, gửi heartbeat, subscribe trays và vẽ giao diện từ đó	Màn hình sản phẩm, máy và khay
-M2: mua thành công	order/create → payment/callback → dispense/* → COMPLETED	Luồng đầy đủ: chọn khay, QR, nút giả lập thanh toán, nhả hàng	Gọi Server thật cho đăng nhập, sản phẩm, máy
-M3: nhánh lỗi	JAMMED, hoàn tiền, hết hạn, SweepStaleOrders(), LWT, cảnh báo	Bảng điều khiển kịch bản (thanh toán lỗi, kẹt hàng, ngắt mạng), gửi lại khi mất phản hồi	Cảnh báo, xử lý cảnh báo
-M4: tiếp hàng và báo cáo	Phiếu tiếp hàng, đơn hàng, doanh thu	Hoàn thiện, log panel	Tiếp hàng, tra cứu đơn, báo cáo
-Cách làm song song khi chưa có phần kia:
-
-Device chưa có Server thật: dùng MQTT Explorer tự publish trays và order/status mẫu (theo API.md) để thử giao diện.
-
-App chưa có Server thật: dùng FakeApiClient.
-
-Server chưa có Device: dùng MQTT Explorer publish order/create... và Postman cho REST.
-
-Mỗi mốc kết thúc bằng một buổi ghép nối cả nhóm: chạy được luồng của mốc đó trên một máy rồi mới sang mốc kế.
+Bốn người, bốn cột: Server-A (MQTT và đơn hàng), Server-B (nền tảng và REST), Device, AdminApp. Người làm Device còn phụ trách phần báo cáo (sơ đồ, bảng test case) song song suốt dự án.
+Các mốc M0 → M4 là điểm ghép nối, không phải cổng chặn (luật chi tiết trong README.md). Mỗi người đi hết phần của mình theo tốc độ riêng; mỗi mốc có một buổi ghép nối vào ngày cố định, cả nhóm chạy đầu-cuối trên một máy.
+Cách chia nhánh và file cho Server (hai người làm chung một project):
+Server-A làm trên nhánh feature/server-mqtt, Server-B làm trên nhánh feature/server-rest. Mỗi người mở pull request riêng vào main và kéo main về nhánh mình thường xuyên.
+Program.cs là chỗ dễ đụng nhau nhất. Mỗi người đăng ký DI trong một hàm riêng (AddMqttModule() của A, AddAdminModule() của B), Program.cs chỉ gọi hai dòng.
+Làm khi chưa có phần kia:
+Device chưa có Server: dùng MQTT Explorer tự publish trays, order/status mẫu (theo API.md).
+AdminApp chưa có Server: dùng FakeApiClient.
+Server chưa có Device: dùng MQTT Explorer gửi order/create... và Postman cho REST.
+M0: Nền tảng
+Người	Việc	Xong khi
+Server-A	Ngày đầu: định nghĩa interface IDeviceNotifier, DTO order/status, các enum trạng thái (một file nhỏ để B không bị chặn). Sau đó viết logic thuần: OrderStateMachine, tính số chai khả dụng, hàm kiểm tra quá hạn, kèm unit test.	Test bảng chuyển trạng thái đơn chạy xanh.
+Server-B	Khung project: Solution, thư mục, đọc appsettings.Local.json, DI, kết nối DB, JsonDefaults, DateTimeOffsetHandler, IClock, định dạng lỗi có details, JWT và đăng nhập, Serilog, NullDeviceNotifier tạm, /health.	Login admin ra token, sai mật khẩu ra 401, /health chạy, máy người khác chạy được theo README.
+Device	Khung WinForms, đọc cấu hình, lưới khay từ file JSON mẫu và ảnh trong images/.	Lưới hiện đủ ảnh, giá, tồn kho; khay hết hàng bị mờ.
+AdminApp	Khung WinForms, IApiClient với FakeApiClient và ApiClient, màn hình đăng nhập, menu theo vai trò.	Đăng nhập admin và staff1 (dữ liệu giả) thấy menu khác nhau.
+Phối hợp: Server-B đẩy khung lên main sớm nhất có thể, mục tiêu trong 1–2 ngày đầu, vì Server-A cần chỗ để gắn code. Trong lúc chờ, A làm logic thuần trên nhánh của mình, không phụ thuộc ASP.NET hay MQTT. Khi khung lên main, A kéo main về rồi chép file vào đúng thư mục. Interface IDeviceNotifier do A định nghĩa; B đăng ký NullDeviceNotifier tạm, sau thay bằng MqttService thật.
+M1: Nối MQTT và dữ liệu nền
+Người	Việc	Xong khi
+Server-A	MqttService (ManagedMqttClient, subscribe lại khi kết nối lại), nhận heartbeat, xử lý LWT, publish trays (retained) khi khởi động.	MQTT Explorer publish heartbeat thì last_heartbeat đổi; subscribe vending/M01/trays thấy danh sách khay.
+Server-B	REST sản phẩm (thêm, sửa, ngừng/mở bán), máy và khay, GET /machines có connection tính ra, phân quyền A/S; gọi IDeviceNotifier mỗi khi đổi dữ liệu.	Postman thêm sản phẩm và gán vào khay thì (khi A xong MqttService) MQTT Explorer thấy trays đổi.
+Device	MqttClientService (ClientId = mã máy, LWT), heartbeat 15 giây, subscribe trays và vẽ lưới, ô log.	Lưới đổi theo dữ liệu Server; tắt Device đột ngột thì máy thành OFFLINE ngay.
+AdminApp	Màn hình sản phẩm, máy và khay (dữ liệu giả), hiển thị lỗi details tô đỏ từng ô.	Thêm, sửa, ngừng bán sản phẩm trên dữ liệu giả.
+Phối hợp: Server-A và Device chốt dữ liệu topic trays, cùng bám ví dụ JSON ở API.md mục A3. Cuối mốc chạy thử chéo: Device vẽ đúng từ message của Server thật, kể cả available: false và product: null. Server-B và AdminApp bám API.md mục B3, B4.
+M2: Mua hàng thành công
+Người	Việc	Xong khi
+Server-A	OrderService: order/create (khóa FOR UPDATE, BR-03/04), payment/callback, dispense/command, dispense/started, dispense/result OK (trừ kho, cảnh báo tồn kho), publish order/status, chống trùng.	Chạy trọn luồng bằng MQTT Explorer ra đơn COMPLETED, tồn kho −1; gửi trùng không xử lý hai lần; hai đơn giành chai cuối chỉ một đơn thắng.
+Server-B	GET /orders, GET /orders/{id} (có CheckAndExpireOrder).	Đơn tạo bằng MQTT hiện đúng trong API.
+Device	Luồng mua: chọn khay → order/create (requestId) → QR và đếm ngược theo expiresAt → nút giả lập thanh toán → nhận lệnh nhả → dispense/started → hiệu ứng → dispense/result OK.	Mua trọn luồng với Server thật.
+AdminApp	Chuyển sang Server thật cho đăng nhập, sản phẩm, máy, khay.	Thêm sản phẩm trên App thì Device thấy đổi.
+Phối hợp: Server-A và Server-B làm song song. B thử GET /orders bằng đơn chèn tay trong DB cho đến khi luồng của A chạy được. Device và Server-A bám đúng order/status và requestId ở API.md mục A3.
+M3: Nhánh lỗi và cảnh báo
+Người	Việc	Xong khi
+Server-A	JAMMED và hoàn tiền, SweepStaleOrders() và CheckAndExpireOrder() (3 điều kiện; payments thành FAILED khi đơn hết hạn), cảnh báo JAMMED, publish lại trays đủ các trường hợp.	Kẹt hàng ra REFUNDED; 120s không trả ra EXPIRED; callback muộn bị từ chối; kết quả nhả đến muộn bị INVALID_STATE.
+Server-B	REST cảnh báo: danh sách (kèm cảnh báo ảo MACHINE_OFFLINE), đóng cảnh báo (đóng JAMMED thì publish lại trays).	Đóng cảnh báo kẹt thì khay bán lại được.
+Device	Bảng điều khiển kịch bản (thanh toán lỗi, kẹt hàng, ngắt mạng), gửi lại sau 5 giây tối đa 3 lần, hiển thị error, EXPIRED, REFUNDED.	Mọi kịch bản lỗi hiện đúng thông báo.
+AdminApp	Màn hình cảnh báo (lọc, đánh dấu đã xử lý, hiện MACHINE_OFFLINE), tự làm mới mỗi 10 giây.	Device báo kẹt thì App thấy cảnh báo.
+Phối hợp (cảnh báo, ba bên cùng chạm vào): Server-A tạo bản ghi cảnh báo, Server-B đọc và đóng, AdminApp hiển thị. Chốt dạng JSON của alerts ở API.md mục B5 trước khi làm. Kiểm tra cuối mốc: Device báo kẹt → App thấy cảnh báo → đóng cảnh báo → khay bán lại được.
+M4: Tiếp hàng, báo cáo, hoàn thiện
+Người	Việc	Xong khi
+Server-A	Gỡ lỗi, hoàn thiện unit test (tối thiểu 15 ca), hỗ trợ B phần publish trays khi xác nhận tiếp hàng.	Toàn bộ test xanh.
+Server-B	Tiếp hàng (gợi ý, GET /staff, tạo phiếu, start, confirm, cancel) và báo cáo doanh thu.	Xác nhận phiếu thì tồn kho tăng, cảnh báo tự đóng, trays được publish lại.
+Device	Hoàn thiện giao diện, chạy cùng lúc hai máy (M01, M02). Cộng báo cáo: sequence, activity, state, class diagram, bảng test case.	Hai máy chạy độc lập.
+AdminApp	Tiếp hàng (Admin tạo phiếu; Nhân viên nhận và xác nhận), tra cứu đơn, báo cáo doanh thu.	Xác nhận phiếu thì tồn kho và cảnh báo đổi đúng.
+Phối hợp: Server-B và AdminApp chốt JSON gợi ý và phiếu ở API.md mục B6 trước khi làm màn hình Tiếp hàng; hai bên phối hợp chặt suốt mốc này.
+Ghép nối cuối mỗi mốc
+Cả nhóm chạy thử đầu-cuối trên một máy, chụp ảnh kết quả cho báo cáo, ghi lỗi tìm được. Phần nào chưa kịp thì chuyển sang mốc sau, không kéo dài buổi ghép nối.
 
 9. Cài Mosquitto (cả nhóm làm giống nhau)
 Mỗi người cài Mosquitto trên máy mình, tạo ba file cấu hình đặt cùng thư mục (ví dụ thư mục cài đặt Mosquitto):
@@ -264,6 +293,3 @@ Nếu không cấu hình, C# WinForms đọc JSON camelCase (orderId) vào prope
 
 10.8. Đuôi .txt ẩn trên Windows.
 Notepad lưu mosquitto.conf thành mosquitto.conf.txt. Tương tự với file acl và passwd. Bật View → Show → File name extensions để kiểm tra. Mosquitto sẽ báo lỗi "cannot open file" nếu dính bẫy này.
-
-Việc còn lại sau file này
-Thêm vào .gitignore: appsettings.Local.json, logs/, bin/, obj/, .vs/. Cập nhật README.md với bảng phụ trách thư mục và hướng dẫn cài (MySQL, Mosquitto, .NET 8). Cập nhật API.md mục 0 với quy ước trường null (theo 10.6).
