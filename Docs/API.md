@@ -261,8 +261,18 @@ Lỗi: `401 INVALID_CREDENTIALS`, `403 ACCOUNT_DISABLED` (`users.is_active = 0`)
 Body `POST /products`:
 ```json
 { "name": "Nước suối", "volumeMl": 500, "price": 5000, "imageUrl": "/images/nuoc-suoi.png" }
+Response mẫu `GET /products`:
+```json
+[
+  {
+    "id": 1, "name": "Nước suối", "volumeMl": 500, "price": 5000, 
+    "imageUrl": "/images/nuoc-suoi.png", "isActive": true, "createdAt": "2026-10-12T09:30:00+07:00"
+  }
+]
 ```
 Đổi giá không ảnh hưởng đơn cũ (BR-02). Sau khi sửa giá, ngừng/mở bán thì Server publish lại `trays` cho các máy liên quan.
+
+## B4. Máy và khay (UC02)
 
 ## B4. Máy và khay (UC02)
 
@@ -275,24 +285,91 @@ Body `POST /products`:
 | POST | `/machines/{id}/trays` | A | Thêm khay |
 | PUT | `/trays/{id}` | A | Gán sản phẩm, sức chứa, ngưỡng cảnh báo |
 
-Một phần tử trong `GET /machines`:
+**`GET /machines`** trả về mảng các máy:
 ```json
-{
-  "id": 1, "code": "M01", "name": "Máy sảnh A1", "location": "Sảnh tòa A1",
-  "status": "ACTIVE",
-  "lastHeartbeat": "2026-10-12T09:29:50+07:00",
-  "connection": "ONLINE"
-}
+[
+  {
+    "id": 1,
+    "code": "M01",
+    "name": "Máy sảnh A1",
+    "location": "Sảnh tòa A1",
+    "status": "ACTIVE",
+    "lastHeartbeat": "2026-10-12T09:29:50+07:00",
+    "connection": "ONLINE"
+  },
+  {
+    "id": 2,
+    "code": "M02",
+    "name": "Máy thư viện",
+    "location": "Thư viện Tạ Quang Bửu",
+    "status": "ACTIVE",
+    "connection": "OFFLINE"
+  }
+]
 ```
-`connection` là giá trị **tính ra lúc đọc**: `OFFLINE` khi `lastHeartbeat` là `NULL` hoặc cách hiện tại hơn 60 giây, ngược lại `ONLINE` (BR-12). Không lưu trong DB.
+`connection` là giá trị **tính ra lúc đọc**: `OFFLINE` khi `lastHeartbeat` là `NULL` (trường này vắng mặt trong JSON) hoặc cách hiện tại hơn 60 giây, ngược lại `ONLINE` (BR-12). Không lưu trong DB.
 
-Body `POST /machines/{id}/trays`:
+**`POST /machines`**, body:
 ```json
-{ "code": "A1", "productId": 1, "quantity": 8, "capacity": 10, "lowStockThreshold": 2 }
+{ "code": "M03", "name": "Máy phòng học", "location": "Phòng A" }
 ```
-`quantity` chỉ dùng được lúc **tạo khay** (nạp ban đầu, mặc định 0). `PUT /trays/{id}` **không** sửa `quantity`; sau đó số lượng chỉ đổi qua đơn hàng và tiếp hàng ("chỉ Server được sửa").
-Lỗi: `409 DUPLICATE_CODE` (trùng mã máy hoặc mã khay trong cùng máy), `400 VALIDATION_ERROR`.
-Mọi thay đổi ở nhóm này (thêm khay, gán sản phẩm, đổi sức chứa/ngưỡng, đổi trạng thái máy) làm Server publish lại `trays` của máy đó.
+`code` tối đa 20 ký tự, `name` tối đa 100, `location` tối đa 200 (không bắt buộc). Máy mới có `status` là `ACTIVE`. Response `201`: một đối tượng máy như ở trên.
+Lỗi: `409 DUPLICATE_CODE` (trùng mã máy), `400 VALIDATION_ERROR`.
+
+**`PUT /machines/{id}`**, body:
+```json
+{ "name": "Máy phòng học", "location": "Phòng B", "status": "MAINTENANCE" }
+```
+`status` chỉ nhận `ACTIVE` hoặc `MAINTENANCE`. Không đổi được `code`. Response `200`: đối tượng máy sau khi sửa.
+Lỗi: `404 MACHINE_NOT_FOUND`, `400 VALIDATION_ERROR`.
+
+**`GET /machines/{id}/trays`** trả về mảng các khay của máy, sắp theo `code`:
+```json
+[
+  {
+    "id": 1,
+    "machineId": 1,
+    "code": "A1",
+    "productId": 1,
+    "productName": "Nước suối",
+    "quantity": 8,
+    "capacity": 10,
+    "lowStockThreshold": 2
+  },
+  {
+    "id": 7,
+    "machineId": 1,
+    "code": "B4",
+    "quantity": 0,
+    "capacity": 10,
+    "lowStockThreshold": 2
+  }
+]
+```
+Khay chưa gán sản phẩm thì không có `productId` và `productName` (vắng mặt, coi như `null`).
+Lỗi: `404 MACHINE_NOT_FOUND`.
+
+**`POST /machines/{id}/trays`**, body:
+```json
+{ "code": "A1", "productId": 1, "quantity": 5, "capacity": 10, "lowStockThreshold": 2 }
+```
+- `code`: mã khay, tối đa 10 ký tự, không trùng trong cùng một máy.
+- `productId`: không bắt buộc (khay có thể để trống).
+- `quantity`: số chai ban đầu, mặc định 0. **Chỉ nhập được lúc tạo khay**, sau đó chỉ đổi qua đơn hàng và tiếp hàng.
+- `capacity`: sức chứa, **từ 1 đến 30** (BR-22).
+- `lowStockThreshold`: ngưỡng cảnh báo, mặc định 2.
+
+Response `201`: đối tượng khay như ở trên.
+Lỗi: `404 MACHINE_NOT_FOUND`, `404 PRODUCT_NOT_FOUND`, `409 DUPLICATE_CODE` (máy đã có khay mã đó), `400 VALIDATION_ERROR` (kể cả khi `quantity` lớn hơn `capacity`).
+
+**`PUT /trays/{id}`**, body (không có `quantity` và `code`):
+```json
+{ "productId": 2, "capacity": 12, "lowStockThreshold": 3 }
+```
+`capacity` từ 1 đến 30 và **không được nhỏ hơn số chai hiện có** trong khay. Response `200`: đối tượng khay sau khi sửa.
+Lỗi: `404 TRAY_NOT_FOUND`, `404 PRODUCT_NOT_FOUND`, `400 VALIDATION_ERROR`.
+
+Mọi thay đổi ở nhóm này (thêm khay, gán sản phẩm, đổi sức chứa hoặc ngưỡng, đổi trạng thái máy) làm Server publish lại `trays` của máy đó.
 
 ## B5. Cảnh báo (UC07)
 
@@ -301,13 +378,47 @@ Mọi thay đổi ở nhóm này (thêm khay, gán sản phẩm, đổi sức ch
 | GET | `/alerts?resolved=false&machineId=&type=` | S | Danh sách cảnh báo |
 | POST | `/alerts/{id}/resolve` | S | Đánh dấu đã xử lý (BR-21) |
 
-`GET /alerts` trả cảnh báo lưu trong bảng `alerts` **cộng thêm** cảnh báo `MACHINE_OFFLINE` ảo cho mỗi máy đang `OFFLINE` (tính ra lúc đọc, không ghi bảng, BR-12). Cảnh báo ảo có `id` là `null` và `virtual: true`:
-```json
-{ "id": null, "machineId": 2, "trayId": null, "type": "MACHINE_OFFLINE",
-  "message": "Máy M02 mất kết nối", "isResolved": false, "virtual": true }
-```
-`POST /alerts/{id}/resolve` ghi `resolved_at = now`, `resolved_by` = người đăng nhập. Lỗi: `404 ALERT_NOT_FOUND`, `409 INVALID_STATE` (đã xử lý rồi). Đóng cảnh báo `JAMMED` thì khay bán lại được (BR-04) và Server publish lại `trays`.
+`resolved` nhận `true` hoặc `false` (bỏ qua thì lấy cả hai). `type` nhận `LOW_STOCK`, `OUT_OF_STOCK`, `JAMMED` hoặc `MACHINE_OFFLINE`.
 
+**`GET /alerts`** trả về mảng, mới nhất đứng đầu:
+```json
+[
+  {
+    "id": 2,
+    "machineId": 1,
+    "trayId": 4,
+    "type": "OUT_OF_STOCK",
+    "message": "Máy M01 khay B1 (Pepsi) đã hết hàng",
+    "isResolved": false,
+    "createdAt": "2026-10-12T09:15:00+07:00"
+  },
+  {
+    "machineId": 2,
+    "type": "MACHINE_OFFLINE",
+    "message": "Máy M02 mất kết nối",
+    "isResolved": false,
+    "virtual": true
+  }
+]
+```
+`GET /alerts` trả cảnh báo lưu trong bảng `alerts` **cộng thêm** cảnh báo `MACHINE_OFFLINE` ảo cho mỗi máy đang `OFFLINE` (tính ra lúc đọc, không ghi bảng, BR-12). Cảnh báo ảo có `virtual: true`, **không có `id`** (vắng mặt, coi như `null`) và không đóng được. Cảnh báo ảo chỉ xuất hiện khi lọc `resolved=false` hoặc không lọc `resolved`.
+
+**`POST /alerts/{id}/resolve`** không cần body. Server ghi `resolved_at = now` và `resolved_by` = người đăng nhập. Response `200`: cảnh báo sau khi đóng:
+```json
+{
+  "id": 2,
+  "machineId": 1,
+  "trayId": 4,
+  "type": "OUT_OF_STOCK",
+  "message": "Máy M01 khay B1 (Pepsi) đã hết hàng",
+  "isResolved": true,
+  "createdAt": "2026-10-12T09:15:00+07:00",
+  "resolvedAt": "2026-10-12T10:02:00+07:00",
+  "resolvedBy": 2
+}
+```
+Lỗi: `404 ALERT_NOT_FOUND`, `409 INVALID_STATE` (đã xử lý rồi).
+Đóng cảnh báo `JAMMED` thì khay bán lại được (BR-04) và Server publish lại `trays`.
 ## B6. Tiếp hàng (UC03, UC08)
 
 | Method | Đường dẫn | Quyền | Mô tả |
@@ -376,6 +487,7 @@ Doanh thu chỉ tính đơn `COMPLETED`; đơn `REFUNDED` không tính. `refunde
 
 | Mã | HTTP | Ý nghĩa |
 |---|---|---|
+| `UNAUTHORIZED` | 401 | Chưa đăng nhập hoặc token hết hạn |
 | `INVALID_CREDENTIALS` | 401 | Sai tài khoản hoặc mật khẩu |
 | `ACCOUNT_DISABLED` | 403 | Tài khoản bị khóa |
 | `FORBIDDEN` | 403 | Không đủ quyền (BR-17) |
