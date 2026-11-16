@@ -213,6 +213,9 @@ App báo 401: token JWT hết hạn (8 giờ), đăng nhập lại.
 
 Port 5000 hoặc 1883 bị chiếm: đổi trong file cấu hình, không cần sửa code.
 
+- **Lỗi MQTT Explorer không nhận dữ liệu:** Mặc định nó subscribe vào `#` và `$SYS/#`. Phải vào Advanced -> Topics, xóa `#` và thêm `vending/#`. Nếu dùng tài khoản `device`, phải đặt Client ID trùng mã máy (ví dụ `M01`).
+- **Server chạy sai cổng:** Mở `Properties/launchSettings.json`, đảm bảo `applicationUrl` là `http://localhost:5000` để App không bị lỗi gọi API.
+
 8. Các bước pull request
 Code trong thư mục của mình, trên đúng nhánh của mình (ví dụ feature/server).
 
