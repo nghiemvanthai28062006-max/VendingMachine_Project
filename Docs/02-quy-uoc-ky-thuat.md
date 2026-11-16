@@ -84,8 +84,7 @@ Chọn: dùng ManagedMqttClient (tự kết nối lại) cho cả Server và Dev
 
 Tình huống	Cách xử lý
 Mất kết nối broker	ManagedMqttClient tự kết nối lại, AutoReconnectDelay = 5 giây. Không viết vòng retry tự chế
-Kết nối lại xong	Subscribe lại tất cả topic trong sự kiện ConnectedAsync (bắt buộc vì phiên có thể mất). Server còn phải: chạy SweepStaleOrders() và publish lại trays của mọi máy. Device: gửi ngay một heartbeat
-Publish thất bại (Server)	Ghi log mức Warning. DB mới là nguồn sự thật: trạng thái đơn đã lưu trước khi publish. Device gửi lại yêu cầu thì Server publish lại order/status (BR-16)
+| Kết nối lại xong | ManagedMqttClient tự subscribe lại. Server dùng ConnectedAsync để chạy SweepStaleOrders() và publish lại trays. Device dùng nó để gửi ngay một heartbeat |Publish thất bại (Server)	Ghi log mức Warning. DB mới là nguồn sự thật: trạng thái đơn đã lưu trước khi publish. Device gửi lại yêu cầu thì Server publish lại order/status (BR-16)
 Device không nhận được phản hồi	Sau 5 giây chưa có order/status cho yêu cầu vừa gửi, gửi lại cùng requestId; tối đa 3 lần, rồi hiện "Mất kết nối, vui lòng thử lại" và quay về màn hình chính
 Payload sai định dạng (JSON hỏng, thiếu trường)	Server không đổ vỡ: bắt exception, ghi log Warning, trả error: VALIDATION_ERROR nếu đọc được requestId, không thì bỏ qua
 Exception bất ngờ trong handler	Bắt ở tầng Handler, ghi log Error, không để làm sập tiến trình
@@ -142,7 +141,7 @@ Device Simulator: có một ô hiển thị log trên giao diện (các message 
 
 7. Cấu hình
 Chọn: appsettings.json (commit, giá trị mặc định không bí mật) + appsettings.Local.json (không commit, mỗi người tự tạo, ghi đè bí mật). Repo commit thêm appsettings.Local.example.json làm mẫu. Thêm appsettings.Local.json vào .gitignore (BR-18).
-
+**Quan trọng:** Server phải chạy ở cổng **5000** để khớp với mọi tài liệu (`API.md`, README, cấu hình App). **bắt buộc phải sửa file `Properties/launchSettings.json`** trong project Server, đổi dòng `applicationUrl` thành `http://localhost:5000`. Visual Studio đôi khi tự gán cổng 5100, nếu để vậy App sẽ không gọi được API.
 Cả nhóm dùng đúng tên khóa sau:
 
 Server
@@ -233,6 +232,9 @@ text
 mosquitto_passwd -c passwd device
 mosquitto_passwd passwd server
 Chạy broker để xem log: mosquitto -c mosquitto.conf -v. listener 1883 localhost chỉ cho kết nối từ chính máy này (đủ để phát triển). Khi demo nhiều máy mới đổi sang cho phép kết nối từ ngoài và mở tường lửa.
+**Lưu ý khi dùng MQTT Explorer để test:**
+- Mặc định MQTT Explorer tự động subscribe vào `#` và `$SYS/#`. Bạn **phải xóa** 2 topic này đi trong phần cài đặt kết nối (Advanced -> Topics).
+- Thêm topic `vending/#` vào danh sách subscribe để xem dữ liệu. Nếu đăng nhập bằng tài khoản `device`, bạn **phải đặt Client ID = mã máy** (ví dụ `M01`).
 
 10. Bẫy thường gặp khi code
 10.1. Server không tự đọc appsettings.Local.json.
