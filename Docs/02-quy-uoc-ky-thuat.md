@@ -1,16 +1,6 @@
 Quy ước kỹ thuật — Hệ thống máy bán nước thông minh
-Trạng thái: BẢN NHÁP, bổ sung cho 01-pham-vi-va-luat-nghiep-vu.md (File 1) và API.md. File này trả lời các câu hỏi "code thế nào" mà hai file kia không quy định. Nguyên tắc chọn: đơn giản, dễ làm; nếu khó hơn một chút mà kết quả đẹp hơn thì chọn; quá khó thì bỏ. Mâu thuẫn với File 1 thì File 1 thắng.
+Trạng thái: bổ sung cho 01-pham-vi-va-luat-nghiep-vu.md (File 1) và API.md. File này trả lời các câu hỏi "code thế nào" mà hai file kia không quy định. Nguyên tắc chọn: đơn giản, dễ làm; nếu khó hơn một chút mà kết quả đẹp hơn thì chọn; quá khó thì bỏ. Mâu thuẫn với File 1 thì File 1 thắng.
 
-Có code song song được chưa?
-Được ngay. Hợp đồng giao tiếp (API.md) và DB (schema.sql) đã đủ. Chỉ có 3 thứ cần cả nhóm thống nhất trước khi mỗi người bắt đầu, và đều nằm trong file này:
-
-Tên khóa cấu hình (mục 7), để mỗi người cấu hình đúng một kiểu.
-
-Cấu hình Mosquitto (mục 9), để ai cũng chạy được broker giống nhau.
-
-Dạng lỗi trả về (mục 4).
-
-Các mục còn lại là quyết định riêng của từng thành phần, người phụ trách cứ làm theo.
 
 1. Kiến trúc code (Server)
 Chọn: ASP.NET Core Web API, 3 lớp, truy cập DB bằng Dapper + MySqlConnector.
@@ -72,12 +62,13 @@ UPDATE orders SET status='COMPLETED', completed_at=@now
 UPDATE trays SET quantity = quantity - 1
  WHERE id=@trayId AND quantity > 0;                -- phải ảnh hưởng đúng 1 dòng, không thì rollback
 Quy tắc chung:
-
 Mọi chuyển trạng thái đơn viết dạng UPDATE orders SET status=@mới ... WHERE id=@id AND status=@cũ và kiểm tra số dòng bị tác động = 1. Nhờ vậy SweepStaleOrders() và payment/callback đến cùng lúc cũng không đè nhau (chỉ một bên thắng).
 
 Tiếp hàng: UPDATE trays SET quantity = quantity + @n WHERE id=@id AND quantity + @n <= capacity.
 
 Gặp lỗi khóa chéo (mã MySQL 1213) thì thử lại transaction một lần.
+
+transaction chạy READ COMMITTED (lý do: FOR UPDATE rồi đếm lại phải thấy dữ liệu mới); gặp deadlock thử lại một lần.
 
 3. Xử lý lỗi MQTT
 Chọn: dùng ManagedMqttClient (tự kết nối lại) cho cả Server và Device; ghi DB trước, publish sau; Device gửi lại yêu cầu nếu không thấy phản hồi.
@@ -89,6 +80,7 @@ Device không nhận được phản hồi	Sau 5 giây chưa có order/status ch
 Payload sai định dạng (JSON hỏng, thiếu trường)	Server không đổ vỡ: bắt exception, ghi log Warning, trả error: VALIDATION_ERROR nếu đọc được requestId, không thì bỏ qua
 Exception bất ngờ trong handler	Bắt ở tầng Handler, ghi log Error, không để làm sập tiến trình
 Server chưa kết nối được broker lúc khởi động	Vẫn chạy REST bình thường, MQTT tự thử lại. Ghi log rõ
+ManagedMqttClient tự subscribe lại; ConnectedAsync chỉ dùng để publish lại trays.
 4. Dạng lỗi khi dữ liệu sai
 REST (bổ sung cho API.md mục B1): khi nhiều trường cùng sai thì trả hết trong một lần để form tô đỏ được nhiều ô:
 
@@ -125,7 +117,7 @@ planned_qty, giới hạn sức chứa khi châm	BR-13, 14
 Sắp xếp độ khẩn của máy cần tiếp hàng	BR-15
 Tính doanh thu (chỉ đơn COMPLETED)	API.md B8
 Tối thiểu 15–20 test case chạy xanh, chụp ảnh kết quả đưa vào báo cáo. Không bắt buộc viết test tích hợp với MySQL thật; thay vào đó kiểm thử thủ công các ca tranh chấp và ghi vào bảng test của báo cáo (chạy hai Device cùng giành chai cuối).
-
+ã có project Server.Tests (xUnit), khoảng 45 ca kiểm thử.
 6. Ghi log
 Chọn: Serilog (Serilog.AspNetCore), ghi ra console và file logs/server-.log (mỗi ngày một file).
 
@@ -163,56 +155,90 @@ json
 (ClientId của Device bằng MachineCode, bắt buộc để ACL %c chạy đúng, BR-19.)
 
 App quản lý
-
 json
-{ "Api": { "BaseUrl": "http://localhost:5000/api" } }
-8. Thứ tự làm và ghép nối
-Bốn người, bốn cột: Server-A (MQTT và đơn hàng), Server-B (nền tảng và REST), Device, AdminApp. Người làm Device còn phụ trách phần báo cáo (sơ đồ, bảng test case) song song suốt dự án.
-Các mốc M0 → M4 là điểm ghép nối, không phải cổng chặn (luật chi tiết trong README.md). Mỗi người đi hết phần của mình theo tốc độ riêng; mỗi mốc có một buổi ghép nối vào ngày cố định, cả nhóm chạy đầu-cuối trên một máy.
-Cách chia nhánh và file cho Server (hai người làm chung một project):
-Server-A làm trên nhánh feature/server-mqtt, Server-B làm trên nhánh feature/server-rest. Mỗi người mở pull request riêng vào main và kéo main về nhánh mình thường xuyên.
-Program.cs là chỗ dễ đụng nhau nhất. Mỗi người đăng ký DI trong một hàm riêng (AddMqttModule() của A, AddAdminModule() của B), Program.cs chỉ gọi hai dòng.
-Làm khi chưa có phần kia:
-Device chưa có Server: dùng MQTT Explorer tự publish trays, order/status mẫu (theo API.md).
-AdminApp chưa có Server: dùng FakeApiClient.
-Server chưa có Device: dùng MQTT Explorer gửi order/create... và Postman cho REST.
-M0: Nền tảng
-Người	Việc	Xong khi
-Server-A	Ngày đầu: định nghĩa interface IDeviceNotifier, DTO order/status, các enum trạng thái (một file nhỏ để B không bị chặn). Sau đó viết logic thuần: OrderStateMachine, tính số chai khả dụng, hàm kiểm tra quá hạn, kèm unit test.	Test bảng chuyển trạng thái đơn chạy xanh.
-Server-B	Khung project: Solution, thư mục, đọc appsettings.Local.json, DI, kết nối DB, JsonDefaults, DateTimeOffsetHandler, IClock, định dạng lỗi có details, JWT và đăng nhập, Serilog, NullDeviceNotifier tạm, /health.	Login admin ra token, sai mật khẩu ra 401, /health chạy, máy người khác chạy được theo README.
-Device	Khung WinForms, đọc cấu hình, lưới khay từ file JSON mẫu và ảnh trong images/.	Lưới hiện đủ ảnh, giá, tồn kho; khay hết hàng bị mờ.
-AdminApp	Khung WinForms, IApiClient với FakeApiClient và ApiClient, màn hình đăng nhập, menu theo vai trò.	Đăng nhập admin và staff1 (dữ liệu giả) thấy menu khác nhau.
-Phối hợp: Server-B đẩy khung lên main sớm nhất có thể, mục tiêu trong 1–2 ngày đầu, vì Server-A cần chỗ để gắn code. Trong lúc chờ, A làm logic thuần trên nhánh của mình, không phụ thuộc ASP.NET hay MQTT. Khi khung lên main, A kéo main về rồi chép file vào đúng thư mục. Interface IDeviceNotifier do A định nghĩa; B đăng ký NullDeviceNotifier tạm, sau thay bằng MqttService thật.
-M1: Nối MQTT và dữ liệu nền
-Người	Việc	Xong khi
-Server-A	MqttService (ManagedMqttClient, subscribe lại khi kết nối lại), nhận heartbeat, xử lý LWT, publish trays (retained) khi khởi động.	MQTT Explorer publish heartbeat thì last_heartbeat đổi; subscribe vending/M01/trays thấy danh sách khay.
-Server-B	REST sản phẩm (thêm, sửa, ngừng/mở bán), máy và khay, GET /machines có connection tính ra, phân quyền A/S; gọi IDeviceNotifier mỗi khi đổi dữ liệu.	Postman thêm sản phẩm và gán vào khay thì (khi A xong MqttService) MQTT Explorer thấy trays đổi.
-Device	MqttClientService (ClientId = mã máy, LWT), heartbeat 15 giây, subscribe trays và vẽ lưới, ô log.	Lưới đổi theo dữ liệu Server; tắt Device đột ngột thì máy thành OFFLINE ngay.
-AdminApp	Màn hình sản phẩm, máy và khay (dữ liệu giả), hiển thị lỗi details tô đỏ từng ô.	Thêm, sửa, ngừng bán sản phẩm trên dữ liệu giả.
-Phối hợp: Server-A và Device chốt dữ liệu topic trays, cùng bám ví dụ JSON ở API.md mục A3. Cuối mốc chạy thử chéo: Device vẽ đúng từ message của Server thật, kể cả available: false và product: null. Server-B và AdminApp bám API.md mục B3, B4.
-M2: Mua hàng thành công
-Người	Việc	Xong khi
-Server-A	OrderService: order/create (khóa FOR UPDATE, BR-03/04), payment/callback, dispense/command, dispense/started, dispense/result OK (trừ kho, cảnh báo tồn kho), publish order/status, chống trùng.	Chạy trọn luồng bằng MQTT Explorer ra đơn COMPLETED, tồn kho −1; gửi trùng không xử lý hai lần; hai đơn giành chai cuối chỉ một đơn thắng.
-Server-B	GET /orders, GET /orders/{id} (có CheckAndExpireOrder).	Đơn tạo bằng MQTT hiện đúng trong API.
-Device	Luồng mua: chọn khay → order/create (requestId) → QR và đếm ngược theo expiresAt → nút giả lập thanh toán → nhận lệnh nhả → dispense/started → hiệu ứng → dispense/result OK.	Mua trọn luồng với Server thật.
-AdminApp	Chuyển sang Server thật cho đăng nhập, sản phẩm, máy, khay.	Thêm sản phẩm trên App thì Device thấy đổi.
-Phối hợp: Server-A và Server-B làm song song. B thử GET /orders bằng đơn chèn tay trong DB cho đến khi luồng của A chạy được. Device và Server-A bám đúng order/status và requestId ở API.md mục A3.
-M3: Nhánh lỗi và cảnh báo
-Người	Việc	Xong khi
-Server-A	JAMMED và hoàn tiền, SweepStaleOrders() và CheckAndExpireOrder() (3 điều kiện; payments thành FAILED khi đơn hết hạn), cảnh báo JAMMED, publish lại trays đủ các trường hợp.	Kẹt hàng ra REFUNDED; 120s không trả ra EXPIRED; callback muộn bị từ chối; kết quả nhả đến muộn bị INVALID_STATE.
-Server-B	REST cảnh báo: danh sách (kèm cảnh báo ảo MACHINE_OFFLINE), đóng cảnh báo (đóng JAMMED thì publish lại trays).	Đóng cảnh báo kẹt thì khay bán lại được.
-Device	Bảng điều khiển kịch bản (thanh toán lỗi, kẹt hàng, ngắt mạng), gửi lại sau 5 giây tối đa 3 lần, hiển thị error, EXPIRED, REFUNDED.	Mọi kịch bản lỗi hiện đúng thông báo.
-AdminApp	Màn hình cảnh báo (lọc, đánh dấu đã xử lý, hiện MACHINE_OFFLINE), tự làm mới mỗi 10 giây.	Device báo kẹt thì App thấy cảnh báo.
-Phối hợp (cảnh báo, ba bên cùng chạm vào): Server-A tạo bản ghi cảnh báo, Server-B đọc và đóng, AdminApp hiển thị. Chốt dạng JSON của alerts ở API.md mục B5 trước khi làm. Kiểm tra cuối mốc: Device báo kẹt → App thấy cảnh báo → đóng cảnh báo → khay bán lại được.
-M4: Tiếp hàng, báo cáo, hoàn thiện
-Người	Việc	Xong khi
-Server-A	Gỡ lỗi, hoàn thiện unit test (tối thiểu 15 ca), hỗ trợ B phần publish trays khi xác nhận tiếp hàng.	Toàn bộ test xanh.
-Server-B	Tiếp hàng (gợi ý, GET /staff, tạo phiếu, start, confirm, cancel) và báo cáo doanh thu.	Xác nhận phiếu thì tồn kho tăng, cảnh báo tự đóng, trays được publish lại.
-Device	Hoàn thiện giao diện, chạy cùng lúc hai máy (M01, M02). Cộng báo cáo: sequence, activity, state, class diagram, bảng test case.	Hai máy chạy độc lập.
-AdminApp	Tiếp hàng (Admin tạo phiếu; Nhân viên nhận và xác nhận), tra cứu đơn, báo cáo doanh thu.	Xác nhận phiếu thì tồn kho và cảnh báo đổi đúng.
-Phối hợp: Server-B và AdminApp chốt JSON gợi ý và phiếu ở API.md mục B6 trước khi làm màn hình Tiếp hàng; hai bên phối hợp chặt suốt mốc này.
+{ "Api": { "BaseUrl": "http://localhost:5000/api" } }.
+Thêm GuidFormat=None; vào chuỗi kết nối mẫu; cổng Server 5100.
+
+Các bản NuGet đã chốt: MQTTnet và MQTTnet.Extensions.ManagedClient 4.3.1.873, Serilog.AspNetCore 8.0.3, MySqlConnector bản stable (không dùng bản beta).
+
+8. Thứ tự làm và ghép nối (Device & AdminApp, Server đã có)
+Hai người làm độc lập theo tốc độ riêng trên nhánh riêng (feature/device, feature/admin-app), mở pull request vào main và kéo main về nhánh mình thường xuyên. Phần Server đã hoàn thiện trên cổng 5100, nên cả hai có thể kết nối thẳng vào Server thật ngay từ đầu (hoặc tự test độc lập bằng MQTT Explorer / FakeApiClient khi chưa bật Server).
+
+Phần 1: Người làm Device (kiêm phụ trách phần báo cáo: sơ đồ, bảng test case song song suốt dự án)
+M0 — Nền tảng:
+
+Việc: Khung WinForms, đọc cấu hình, lưới khay từ file JSON mẫu và ảnh trong images/.
+
+Xong khi: Lưới hiện đủ ảnh, giá, tồn kho; khay hết hàng bị mờ.
+
+M1 — Nối MQTT và dữ liệu nền:
+
+Việc: MqttClientService (ClientId = mã máy, LWT), heartbeat 15 giây, subscribe trays và vẽ lưới, ô log.
+
+Xong khi: Lưới đổi theo dữ liệu Server; tắt Device đột ngột thì máy thành OFFLINE ngay.
+
+Phối hợp: Chốt dữ liệu topic trays, bám ví dụ JSON ở API.md mục A3. Vẽ đúng từ message của Server thật, kể cả available: false và product: null.
+
+M2 — Mua hàng thành công:
+
+Việc: Luồng mua: chọn khay → order/create (requestId) → QR và đếm ngược theo expiresAt → nút giả lập thanh toán → nhận lệnh nhả → dispense/started → hiệu ứng → dispense/result OK.
+
+Xong khi: Mua trọn luồng với Server thật.
+
+Phối hợp: Bám đúng order/status và requestId ở API.md mục A3.
+
+M3 — Nhánh lỗi và cảnh báo:
+
+Việc: Bảng điều khiển kịch bản (thanh toán lỗi, kẹt hàng, ngắt mạng), gửi lại sau 5 giây tối đa 3 lần, hiển thị error, EXPIRED, REFUNDED.
+
+Xong khi: Mọi kịch bản lỗi hiện đúng thông báo.
+
+M4 — Tiếp hàng, báo cáo, hoàn thiện:
+
+Việc: Hoàn thiện giao diện, chạy cùng lúc hai máy (M01, M02). Cộng báo cáo: sequence, activity, state, class diagram, bảng test case.
+
+Xong khi: Hai máy chạy độc lập.
+
+Phần 2: Người làm AdminApp
+M0 — Nền tảng:
+
+Việc: Khung WinForms, IApiClient với FakeApiClient và ApiClient, màn hình đăng nhập, menu theo vai trò.
+
+Xong khi: Đăng nhập admin và staff1 thấy menu khác nhau.
+
+M1 — Nối MQTT và dữ liệu nền:
+
+Việc: Màn hình sản phẩm (thêm, sửa, ngừng/mở bán), máy và khay, hiển thị lỗi details tô đỏ từng ô.
+
+Xong khi: Thêm, sửa, ngừng bán sản phẩm hoạt động đúng.
+
+Phối hợp: Bám API.md mục B3, B4.
+
+M2 — Mua hàng thành công:
+
+Việc: Chuyển sang Server thật cho đăng nhập, sản phẩm, máy, khay.
+
+Xong khi: Thêm sản phẩm trên App thì Device thấy đổi.
+
+M3 — Nhánh lỗi và cảnh báo:
+
+Việc: Màn hình cảnh báo (lọc, đánh dấu đã xử lý, hiện MACHINE_OFFLINE), tự làm mới mỗi 10 giây.
+
+Xong khi: Device báo kẹt thì App thấy cảnh báo.
+
+Phối hợp: Bám dạng JSON của alerts ở API.md mục B5. Kiểm tra đầu-cuối: Device báo kẹt → App thấy cảnh báo → đóng cảnh báo → khay bán lại được.
+
+M4 — Tiếp hàng, báo cáo, hoàn thiện:
+
+Việc: Tiếp hàng (Admin tạo phiếu; Nhân viên nhận và xác nhận), tra cứu đơn, báo cáo doanh thu.
+
+Xong khi: Xác nhận phiếu thì tồn kho và cảnh báo đổi đúng.
+
+Phối hợp: Bám JSON gợi ý và phiếu ở API.md mục B6 (chú ý các trường đã cập nhật như staffName, itemCount, thông báo EXCEEDS_CAPACITY) và mục B8.
+
 Ghép nối cuối mỗi mốc
 Cả nhóm chạy thử đầu-cuối trên một máy, chụp ảnh kết quả cho báo cáo, ghi lỗi tìm được. Phần nào chưa kịp thì chuyển sang mốc sau, không kéo dài buổi ghép nối.
+
 
 9. Cài Mosquitto (cả nhóm làm giống nhau)
 Mỗi người cài Mosquitto trên máy mình, tạo ba file cấu hình đặt cùng thư mục (ví dụ thư mục cài đặt Mosquitto):
