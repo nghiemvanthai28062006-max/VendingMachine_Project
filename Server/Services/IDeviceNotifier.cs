@@ -1,12 +1,10 @@
-﻿namespace Server.Services;
+﻿using Server.Models;
+
+namespace Server.Services;
 
 public interface IDeviceNotifier
 {
     Task PublishTraysAsync(int machineId);
-}
-
-public class NullDeviceNotifier : IDeviceNotifier
-{
-    // Tạm thời không làm gì cả
-    public Task PublishTraysAsync(int machineId) => Task.CompletedTask;
+    Task PublishOrderStatusAsync(string machineCode, OrderStatusMessage message);
+    Task PublishDispenseCommandAsync(string machineCode, DispenseCommandMessage message);
 }
