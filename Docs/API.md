@@ -219,7 +219,8 @@ Server **[lazy: CheckAndExpireOrder]**. Đơn đang `PAID` thì chuyển `DISPEN
 | `DUPLICATE_TRANSACTION` | `transactionCode` đã được dùng |
 
 ---
-
+## A6: BỔ SUNG
+khi nhả lỗi Server publish hai tin liên tiếp DISPENSE_FAILED rồi REFUNDED; tin do Server tự dọn thì không có requestId; callback đến muộn trả status: EXPIRED (không phải error); requestId sai thì phản hồi lỗi không có requestId.
 # PHẦN B — REST (App quản lý ↔ Server)
 
 ## B1. Quy ước
@@ -371,6 +372,7 @@ Lỗi: `404 TRAY_NOT_FOUND`, `404 PRODUCT_NOT_FOUND`, `400 VALIDATION_ERROR`.
 
 Mọi thay đổi ở nhóm này (thêm khay, gán sản phẩm, đổi sức chứa hoặc ngưỡng, đổi trạng thái máy) làm Server publish lại `trays` của máy đó.
 
+
 ## B5. Cảnh báo (UC07)
 
 | Method | Đường dẫn | Quyền | Mô tả |
@@ -450,6 +452,7 @@ Server tự lấy các khay của máy có `quantity` ≤ `low_stock_threshold`,
 { "items": [ { "trayId": 3, "actualQty": 9 }, { "trayId": 4, "actualQty": 10 } ] }
 ```
 Server: `quantity += actualQty` cho từng khay, ghi `actual_qty`, phiếu `DONE` (`completed_at`), đóng các cảnh báo `LOW_STOCK`/`OUT_OF_STOCK` của khay đó (`resolved_by` = người đăng nhập), rồi publish lại `trays`. Lỗi: `400 EXCEEDS_CAPACITY` (châm quá sức chứa), `409 INVALID_STATE` (phiếu đã `DONE` hoặc `CANCELLED`), `403 FORBIDDEN` (Nhân viên không phải người được giao).
+JSON thật của phiếu tiếp hàng có staffName, itemCount, và mỗi item có quantity (hiện có), capacity, actualQty (vắng mặt cho đến khi xác nhận). Thêm STAFF_NOT_FOUND. Nhân viên đụng phiếu của người khác thì 403 FORBIDDEN. Châm 0 chai thì không đóng cảnh báo.
 
 ## B7. Đơn hàng (UC06)
 
@@ -482,6 +485,7 @@ App chỉ **đọc** đơn hàng, không tạo hay sửa trạng thái đơn (vi
 }
 ```
 Doanh thu chỉ tính đơn `COMPLETED`; đơn `REFUNDED` không tính. `refundedAmount` là tổng các `refunds` ở trạng thái `COMPLETED` trong kỳ.
+Mặc định 7 ngày gần nhất, tối đa 366 ngày; doanh thu tính theo ngày hoàn tất; đơn REFUNDED không tính
 
 ## B9. Mã lỗi REST
 
@@ -492,7 +496,7 @@ Doanh thu chỉ tính đơn `COMPLETED`; đơn `REFUNDED` không tính. `refunde
 | `ACCOUNT_DISABLED` | 403 | Tài khoản bị khóa |
 | `FORBIDDEN` | 403 | Không đủ quyền (BR-17) |
 | `VALIDATION_ERROR` | 400 | Thiếu hoặc sai trường dữ liệu |
-| `MACHINE_NOT_FOUND`, `TRAY_NOT_FOUND`, `PRODUCT_NOT_FOUND`, `ALERT_NOT_FOUND`, `TICKET_NOT_FOUND`, `ORDER_NOT_FOUND` | 404 | Không tìm thấy |
+| `MACHINE_NOT_FOUND`, `TRAY_NOT_FOUND`, `PRODUCT_NOT_FOUND`, `ALERT_NOT_FOUND`, `TICKET_NOT_FOUND`, `ORDER_NOT_FOUND`, `STAFF NOT FOUND` | 404 | Không tìm thấy |
 | `DUPLICATE_CODE` | 409 | Trùng mã máy hoặc mã khay |
 | `INVALID_STATE` | 409 | Chuyển trạng thái không hợp lệ |
 | `NOTHING_TO_RESTOCK` | 409 | Không có khay nào cần châm |
