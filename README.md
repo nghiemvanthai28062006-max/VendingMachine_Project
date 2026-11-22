@@ -35,7 +35,7 @@ Server/Infrastructure/: DB, JWT, IClock, lỗi
 
 Server/Database/: schema.sql, seed.sql
 
-Server/appsettings.Local.example.json: File mẫu cấu hình cho Server
+Server/appsettings.Local.example.json: File mẫu cấu hình cho Server, nằm trong 
 
 DeviceSimulator/: WinForms mô phỏng máy bán nước
 
@@ -215,6 +215,11 @@ Port 5000 hoặc 1883 bị chiếm: đổi trong file cấu hình, không cần 
 
 - **Lỗi MQTT Explorer không nhận dữ liệu:** Mặc định nó subscribe vào `#` và `$SYS/#`. Phải vào Advanced -> Topics, xóa `#` và thêm `vending/#`. Nếu dùng tài khoản `device`, phải đặt Client ID trùng mã máy (ví dụ `M01`).
 - **Server chạy sai cổng:** Mở `Properties/launchSettings.json`, đảm bảo `applicationUrl` là `http://localhost:5000` để App không bị lỗi gọi API.
+- Chuỗi kết nối MySQL phải có GuidFormat=None;, nếu không tạo đơn bị lỗi đọc cột request_id.
+Giờ lệch 7 tiếng: phải gọi RemoveTypeMap cho DateTimeOffset trước AddTypeHandler.
+MQTT Explorer: bỏ #, thêm vending/# (tài khoản server); device phải đặt Client ID đúng mã máy và QoS 1.
+Server mặc định chạy cổng 5100 (đổi trong launchSettings.json nếu muốn 5000).
+Mosquitto đã chạy sẵn như dịch vụ Windows: net stop mosquitto trước, chạy bằng đường dẫn đầy đủ.
 
 8. Các bước pull request
 Code trong thư mục của mình, trên đúng nhánh của mình (ví dụ feature/server).
