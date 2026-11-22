@@ -1,3 +1,5 @@
+using Server.Mqtt;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 using System.Text;
@@ -10,6 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using Server.Infrastructure;
 using Server.Repositories;
 using Server.Services;
+Console.OutputEncoding = System.Text.Encoding.UTF8;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,21 +20,39 @@ builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, relo
 
 // Cột snake_case tự ánh xạ vào thuộc tính PascalCase
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+Dapper.SqlMapper.RemoveTypeMap(typeof(DateTimeOffset));
+Dapper.SqlMapper.RemoveTypeMap(typeof(DateTimeOffset?));
 Dapper.SqlMapper.AddTypeHandler(new DateTimeOffsetHandler());
-
 builder.Host.UseSerilog((ctx, cfg) => cfg
     .MinimumLevel.Information()
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
     .WriteTo.Console()
     .WriteTo.File("logs/server-.log", rollingInterval: RollingInterval.Day));
 // DI
-builder.Services.AddSingleton<IDeviceNotifier, NullDeviceNotifier>();
+builder.Services.AddScoped<RestockRepository>();
+builder.Services.AddScoped<RestockService>();
+builder.Services.AddScoped<ReportRepository>();
+builder.Services.AddScoped<ReportService>();
+builder.Services.AddSingleton<ITransactionRunner, TransactionRunner>();
+builder.Services.AddScoped<OrderRepository>();
+builder.Services.AddScoped<AlertRepository>();
+builder.Services.AddScoped<AlertService>();
+builder.Services.AddScoped<OrderService>();
+builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+builder.Services.AddScoped<DeviceService>();
+builder.Services.AddSingleton<MqttService>();
+builder.Services.AddSingleton<IDeviceNotifier>(sp => sp.GetRequiredService<MqttService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MqttService>());
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<IDbConnectionFactory, MySqlConnectionFactory>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<AuthService>();
-
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<IMachineRepository, MachineRepository>();
+builder.Services.AddScoped<ITrayRepository, TrayRepository>();
+builder.Services.AddScoped<MachineService>();
 // Controllers: JSON camelCase, bỏ null; lỗi validation trả hết trong "details"
 builder.Services.AddControllers()
     .AddJsonOptions(o =>
@@ -103,7 +124,28 @@ builder.Services.AddAuthorization();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Dán token vào đây (không cần gõ chữ Bearer)"
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
 

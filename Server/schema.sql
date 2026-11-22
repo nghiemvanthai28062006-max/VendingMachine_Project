@@ -91,7 +91,7 @@ CREATE TABLE trays (
     KEY ix_trays_product (product_id),
     CONSTRAINT fk_trays_machine FOREIGN KEY (machine_id) REFERENCES machines (id),
     CONSTRAINT fk_trays_product FOREIGN KEY (product_id) REFERENCES products (id),
-    CONSTRAINT ck_trays_capacity  CHECK (capacity > 0),
+   CONSTRAINT ck_trays_capacity CHECK (capacity > 0 AND capacity <= 30),
     CONSTRAINT ck_trays_quantity  CHECK (quantity >= 0 AND quantity <= capacity),
     CONSTRAINT ck_trays_threshold CHECK (low_stock_threshold >= 0)
 ) ENGINE=InnoDB;
